@@ -29,10 +29,21 @@ def main():
     p.add_argument('--draft',action='store_true',help='Faster 60%% previews')
     p.add_argument('--exterior-only',action='store_true',help='Skip the optional interior study scenes')
     p.add_argument('--correct-cockpit',action='store_true',help='Correct cockpit glazing in the existing model, preserving all other objects')
+    p.add_argument('--helios-livery',action='store_true',help='Apply Helios 5B-DBY livery to the saved corrected model')
     p.add_argument('--source',help='Input .blend for --correct-cockpit')
     a=p.parse_args()
     blender=find_blender(a.blender)
     (ROOT/'logs').mkdir(exist_ok=True)
+    if a.helios_livery:
+        cmd=[blender,'--background','--factory-startup','--python-exit-code','1','--python',str(ROOT/'scripts'/'apply_helios_livery.py'),'--']
+        if a.source:cmd.extend(['--source',str(Path(a.source).resolve())])
+        if a.skip_render:cmd.append('--skip-render')
+        if a.draft:cmd.append('--draft')
+        with (ROOT/'logs'/'helios_livery.log').open('w',encoding='utf-8') as log:
+            result=subprocess.run(cmd,cwd=ROOT,stdout=log,stderr=subprocess.STDOUT)
+        if result.returncode:raise SystemExit('Helios livery failed. Read logs/helios_livery.log')
+        print('Livery saved and verified:',ROOT/'models'/'Boeing_737-300_Helios_Livery.blend')
+        return
     if a.correct_cockpit:
         cmd=[blender,'--background','--factory-startup','--python-exit-code','1','--python',str(ROOT/'scripts'/'correct_cockpit_windows.py'),'--']
         if a.source:cmd.extend(['--source',str(Path(a.source).resolve())])

@@ -4,6 +4,18 @@ Minimalni paket za uporabo in ponovno generiranje modela s popravljenimi pilotsk
 
 Končni model: **models/Boeing_737-300.blend**. Datoteka je samostojna; za odpiranje ne potrebuje referenčnih fotografij ali zunanjih tekstur.
 
+Različica s poslikavo Helios Airways 5B-DBY »Olympia«: **models/Boeing_737-300_Helios_Livery.blend**. Tekstura glave Heliosa je vgrajena v `.blend`. Izvirna geometrija in popravljena pilotska okna ostajajo ohranjeni.
+
+Za poslikavo obstoječega popravljenega modela:
+
+```powershell
+python run_all.py --helios-livery
+```
+
+Ta korak uporabi `models/Boeing_737-300.blend` in shrani novo datoteko s poslikavo. Dodaj `--skip-render`, če ne potrebuješ izrisov. Preverjanje po ponovnem odprtju rezultata se vedno izvede. Izrisi obeh strani, celotnega letala in repa nastanejo v `renders/helios/`.
+
+Za ponovitev poslikave sta poleg skript potrebni datoteki `assets/helios/lettering_geometry.json` (vektorska geometrija napisov brez odvisnosti od nameščenih pisav) in `assets/helios/helios_tail_reference.webp` (uporabniška fotografska referenca za motiv glave). Podrobnosti so v `assets/helios/README.md`.
+
 ## Zahteve
 
 - Python 3.10 ali novejši.

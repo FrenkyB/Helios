@@ -1,0 +1,23 @@
+{
+  "task": "HEL-1",
+  "variant": "Boeing 737-300 Classic",
+  "units": "meters",
+  "overall_length": 33.4,
+  "fuselage_length": 32.18,
+  "wingspan": 28.88,
+  "fuselage_width": 3.76,
+  "fuselage_height": 4.01,
+  "tail_height": 11.13,
+  "horizontal_tail_span": 12.7,
+  "nose_gear_station": 4.01,
+  "main_gear_station": 16.46,
+  "main_gear_track": 5.23,
+  "engine_lateral_station": 4.83,
+  "engine_intake_station": 11.0,
+  "engine_ground_clearance": 0.5,
+  "winglets": false,
+  "gear_down": true,
+  "render_resolution": [1800, 1200],
+  "render_samples": 48,
+  "source": "Boeing D6-58325-6, REV E, November 2023, printed pages 2-12 and 2-17"
+}

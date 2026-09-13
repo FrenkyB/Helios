@@ -1,4 +1,4 @@
-"""Build the complete Helios 737-300 and passenger cabin with one command."""
+"""Build the Helios 737-300, passenger cabin and Classic flight deck with one command."""
 from pathlib import Path
 import argparse
 import datetime
@@ -54,16 +54,17 @@ def main():
     mode.add_argument('--correct-cockpit', action='store_true', help='Run the existing glazing correction only')
     mode.add_argument('--helios-livery', action='store_true', help='Run the existing livery stage only')
     mode.add_argument('--passenger-cabin', action='store_true', help='Upgrade only the cabin in an existing Helios model')
-    parser.add_argument('--source', help='Input .blend for an individual correction, livery or cabin stage')
+    mode.add_argument('--cockpit-interior', action='store_true', help='Build only the fitted 737 Classic cockpit interior')
+    parser.add_argument('--source', help='Input .blend for an individual correction, livery, cabin or cockpit stage')
     args = parser.parse_args()
-    if args.source and not (args.correct_cockpit or args.helios_livery or args.passenger_cabin):
-        parser.error('--source requires an individual correction, livery or cabin stage')
-    if args.exterior_only and (args.correct_cockpit or args.helios_livery or args.passenger_cabin):
+    if args.source and not (args.correct_cockpit or args.helios_livery or args.passenger_cabin or args.cockpit_interior):
+        parser.error('--source requires an individual correction, livery, cabin or cockpit stage')
+    if args.exterior_only and (args.correct_cockpit or args.helios_livery or args.passenger_cabin or args.cockpit_interior):
         parser.error('--exterior-only applies to regeneration, not individual edit stages')
     blender = find_blender(args.blender)
     (ROOT / 'logs').mkdir(exist_ok=True)
     (ROOT / 'reports').mkdir(exist_ok=True)
-    names = (['Boeing_737-300_Helios_Livery.blend'] if args.helios_livery or args.passenger_cabin else
+    names = (['Boeing_737-300_Helios_Livery.blend'] if args.helios_livery or args.passenger_cabin or args.cockpit_interior else
              ['Boeing_737-300.blend'] if args.correct_cockpit else
              ['HEL-1_Boeing_737-300.blend'] if args.base_only else
              ['HEL-1_Boeing_737-300.blend', 'Boeing_737-300.blend', 'Boeing_737-300_Helios_Livery.blend'])
@@ -75,6 +76,10 @@ def main():
             shutil.copy2(path, backup / name)
     common = (['--skip-render'] if args.skip_render else []) + (['--draft'] if args.draft else [])
     source = ['--source', str(Path(args.source).resolve())] if args.source else []
+    if args.cockpit_interior:
+        run(blender, 'update_classic_cockpit.py', 'classic_cockpit.log', source + common)
+        run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log')
+        return
     if args.passenger_cabin:
         run(blender, 'update_passenger_cabin.py', 'passenger_cabin.log', source + common)
         return
@@ -97,9 +102,8 @@ def main():
     run(blender, 'verify_cockpit_correction.py', 'cockpit_preservation.log')
     run(blender, 'apply_helios_livery.py', 'helios_livery.log', common)
     if not args.exterior_only:
-        baseline = backup / 'Boeing_737-300_Helios_Livery.blend'
-        verification_args = ['--baseline', str(baseline)] if baseline.exists() else []
-        run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log', verification_args)
+        run(blender, 'update_classic_cockpit.py', 'classic_cockpit.log', common)
+        run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log')
         if not args.skip_render:
             run(blender, 'render_passenger_cabin.py', 'passenger_renders.log', ['--draft'] if args.draft else [])
     print('Finished:', ROOT / 'models' / 'Boeing_737-300_Helios_Livery.blend')

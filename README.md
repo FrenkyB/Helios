@@ -1,6 +1,6 @@
 # HEL-1 — Boeing 737-300 Classic / Helios Airways
 
-Končni model: **models/Boeing_737-300_Helios_Livery.blend**. Vsebuje zunanjost s poslikavo 5B-DBY »Olympia«, obstoječi cockpit in vgrajeno potniško kabino. Tekstura repa je vgrajena; dodatne fotografije in Python paketi niso potrebni.
+Končni model: **models/Boeing_737-300_Helios_Livery.blend**. Vsebuje zunanjost s poslikavo 5B-DBY »Olympia«, cockpit 737 Classic in vgrajeno potniško kabino. Tekstura repa in detajli cockpit plošč so vgrajeni v `.blend`; za odpiranje dodatne slike niso potrebne.
 
 ## Ena gradnja za celoten model
 
@@ -10,7 +10,7 @@ V tej mapi zaženi:
 python run_all.py
 ```
 
-Ukaz zaporedoma zgradi osnovni model in kabino, uporabi obstoječo korekcijo pilotskih oken, nanese Helios poslikavo, ponovno odpre shranjene datoteke in preveri rezultat. Na koncu izriše zunanjost ter štiri poglede kabine. Koda geometrije cockpita in korekcije pilotskih oken je nespremenjena.
+Ukaz zaporedoma zgradi osnovni model in kabino, uporabi obstoječo korekcijo pilotskih oken, nanese Helios poslikavo, ponovno odpre shranjene datoteke in preveri rezultat. Nato izdela notranjost cockpita 737 Classic in izriše zunanjost, štiri poglede kabine ter štiri poglede cockpita. Obstoječa korekcija zunanjih pilotskih oken ostaja nespremenjena.
 
 ```powershell
 python run_all.py --skip-render  # celoten model in vsa preverjanja brez izrisov
@@ -37,7 +37,7 @@ Kabina je v zbirki `B737_300_CABIN_STUDY`, ki je povezana tudi v glavno sceno le
 V Blenderjevem izbirniku scen:
 
 - `HEL-1 | Boeing 737-300`: celotno letalo s kabino v trupu.
-- `02 | Cockpit study`: obstoječa nespremenjena študija cockpita.
+- `02 | 737 Classic flight deck`: nova notranjost cockpita, poravnana z obstoječimi pilotskimi okni.
 - `03 | Passenger cabin - 138 seats`: notranji pogled po prehodu; dodatni kameri za pogled nazaj in detajl sedežev.
 - `04 | Passenger cabin layout`: tloris s skupnimi objekti sedežev in tal, brez oblog in stropa.
 
@@ -45,10 +45,29 @@ Obstoječa zunanja lupina ostaja zaprta; potniška okna so notranji osvetljeni v
 
 Izrisi: `renders/helios/` in `renders/passenger/` (`aisle_forward`, `aisle_aft`, `seat_detail`, `layout`). Dnevniki in preverjanja: `logs/` in `reports/`.
 
+## Cockpit 737 Classic
+
+Cockpit sledi uporabniški predlogi `737-300_cockpit/celotna_slika.jpg` in njenim povečanim detajlom. To je izvedba **737 Classic EFIS**: ločena EADI in EHSI pri obeh pilotih, analogni spremljevalni instrumenti, dva ozka sredinska sklopa motornih prikazovalnikov, CDU pod instrumentno ploščo ter ožji MCP. Razpored overheada, zadnjega radijskega pedestala, požarnih ročic in bočnih konzol sledi povečanim slikam.
+
+Paneli, okvirji prikazovalnikov, tipke, gumbi, stikala, yoka in ročice imajo ločeno 3D geometrijo. Napisi, skale in statična vsebina prikazovalnikov uporabljajo natančno določena UV območja iz priloženih slik. Štiri detajlne slike so v `assets/cockpit/` in so potrebne za ponovno gradnjo; v končnem modelu so vgrajene. Izvor, vloga datotek in način preslikave so opisani v `assets/cockpit/README.md`.
+
+Oba pilotska sedeža, pedali, notranja lupina, okvirji oken, zložen jumpseat in zadnja stena z vrati ostajajo del cockpita. Gre za vizualno rekonstrukcijo po tej predlogi, ne za potrjeno konfiguracijo avionike Helios 5B-DBY ali delujočo simulacijo.
+
+Zbirka `B737_300_COCKPIT_STUDY` je povezana z glavnim letalom in sceno `02 | 737 Classic flight deck`. Podzbirke ločujejo lupino/okna, instrumentno ploščo, MCP, sedeže/komande, pedestal, bočni konzoli in overhead. Šest notranjih okenskih vložkov in okvirjev sledi dejanskim shranjenim zunanjim oknom. Zunanji trup in pilotska zasteklitev ostajata nespremenjena; za pregled notranjosti uporabi sceno 02, saj zunanja lupina ostaja zaprta.
+
+Za nadgradnjo samo cockpita v obstoječem modelu:
+
+```powershell
+python run_all.py --cockpit-interior --draft
+```
+
+Ta korak ne regenerira potniške kabine, zunanjosti ali poslikave. Pred prepisom napravi varnostno kopijo. Po ponovnem odprtju preveri ohranitev vseh objektov, materialov in scen zunaj cockpita, prisotnost glavnih sklopov, štirih Classic EFIS prikazovalnikov, dveh motornih sklopov, vgrajenih slik, prileganje trupu in vseh 138 potniških sedežev. Izrisi nastanejo v `renders/cockpit/`: `overview`, `instruments`, `overhead`, `seats_and_door`. Preverjanje je v `reports/classic_cockpit_verification.json`.
+
 ## Posamezni koraki
 
 ```powershell
 python run_all.py --passenger-cabin --skip-render
+python run_all.py --cockpit-interior --skip-render
 python run_all.py --base-only --skip-render
 python run_all.py --correct-cockpit --skip-render
 python run_all.py --helios-livery --skip-render

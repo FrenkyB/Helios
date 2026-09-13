@@ -125,14 +125,14 @@ def main():
     interior_scenes={}
     if not options.exterior_only:
         import interiors
-        print('Building cockpit and cabin studies',flush=True)
-        interior_scenes=interiors.build(mats)
+        print('Building existing cockpit study and integrated passenger cabin',flush=True)
+        interior_scenes=interiors.build(mats,cfg)
     readme=bpy.data.texts.new('HEL-1_README')
     readme.write('BOEING 737-300 CLASSIC | HEL-1\n\nEditable exterior base mesh at true scale in metres.\n'+
         'Collections 01-07 organize structural parts and fittings. 90 is the studio.\n'+
         'All cameras are named. Default is front three-quarter.\n'+
         'Surface glazing, unrigged landing gear, reconstructed airfoils.\n'+
-        'Use the Scene selector for 02 Cockpit and 03 Cabin interior studies.\n'+
+        'Passenger geometry is shared with the aircraft; scenes 03 Cabin and 04 Layout expose the interior.\n'+
         'Read ../README.md and ../reports/validation.json for scope and checks.\n'+
         'Regenerate with: python run_all.py\n')
     # Save an immediately useful modeling view and keep studio out of viewport clutter.

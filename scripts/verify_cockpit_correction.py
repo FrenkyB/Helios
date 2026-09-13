@@ -1,6 +1,6 @@
 """Read-only verification of the final correction against the original aircraft."""
 import bpy
-import sys,json,hashlib
+import sys,json,hashlib,argparse
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'scripts'))
@@ -34,7 +34,10 @@ def read_state(path):
         materials[m.name]=str((tuple(m.diffuse_color),nodes,links))
     return objects,scene_names,materials,unused_materials
 
-original=ROOT/'models'/'HEL-1_Boeing_737-300.blend'
+parser=argparse.ArgumentParser()
+parser.add_argument('--source',default=str(ROOT/'models'/'HEL-1_Boeing_737-300.blend'))
+options=parser.parse_args(sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else [])
+original=Path(options.source).resolve()
 corrected=ROOT/'models'/'Boeing_737-300.blend'
 old,old_scenes,old_materials,old_unused=read_state(original)
 new,new_scenes,new_materials,new_unused=read_state(corrected)

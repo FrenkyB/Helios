@@ -19,5 +19,19 @@
   "gear_down": true,
   "render_resolution": [1800, 1200],
   "render_samples": 48,
-  "source": "Boeing D6-58325-6, REV E, November 2023, printed pages 2-12 and 2-17"
+  "source": "Boeing D6-58325-6, REV E, November 2023, printed pages 2-12 and 2-17",
+  "cabin": {
+    "rows": 23,
+    "first_row_x": 6.05,
+    "seat_pitch": 0.79,
+    "exit_after_row": 11,
+    "exit_extra_pitch": 0.43,
+    "aisle_width": 0.51,
+    "seat_cell_width": 0.47,
+    "cushion_width": 0.43,
+    "floor_z": 2.68,
+    "front_x": 4.95,
+    "rear_x": 27.0,
+    "reference": "Supplied B737-300_SEATS_REFERENCE_PACK; visual Classic cabin reconstruction, not a verified Helios seating plan."
+  }
 }

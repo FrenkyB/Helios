@@ -1,7 +1,7 @@
-"""Separate, editable cockpit and cabin studies in the exterior coordinate system.
+"""Existing cockpit study and passenger cabin in the exterior coordinate system.
 
 Layouts are illustrative visual reconstructions. They are not operator-specific
-or simulator-functional. Each lives in its own Blender scene in the final file.
+or simulator-functional. The cabin also shares geometry with the aircraft scene.
 """
 import bpy
 from math import pi,sin,cos
@@ -32,7 +32,7 @@ def light(name,loc,target,power,size=1):
     obj=bpy.data.objects.new(name,d);g.COL.objects.link(obj);obj.location=loc
     obj.rotation_euler=(Vector(target)-obj.location).to_track_quat('-Z','Y').to_euler()
 
-def build(m):
+def build(m,cfg):
     m=dict(m)
     m.update({
         'panelblue':g.material('Cockpit | blue-gray instrument panel',(.22,.29,.34),.08,.57),
@@ -45,7 +45,8 @@ def build(m):
         'earth':g.material('Instrument | earth',(.31,.20,.075),0,.6),
         'cabinlight':g.material('Cabin | warm lighting',(.9,.76,.48),0,.3,2),
     })
-    return {'cockpit':cockpit(m),'cabin':cabin(m)}
+    import passenger_cabin
+    return {'cockpit':cockpit(m),**passenger_cabin.build(cfg['cabin'])}
 
 def dial(name,y,z,r,m,attitude=False,x=2.995):
     g.cylinder(name+' bezel',(x-.025,y,z),(x+.004,y,z),r,m['metal'],48)
@@ -138,57 +139,3 @@ def seat(m,name,x,y,floor,pilot=False):
     for dy in [-w*.43,w*.43]:
         g.cube(name+' armrest',(x+.04,y+dy,floor+.65),(.37,.045,.065),m['wing'],.021)
         g.cylinder(name+' leg',(x+.13,y+dy*.7,floor+.05),(x+.13,y+dy*.7,floor+.37),.022,m['metal'],12)
-
-def cabin(m):
-    col=g.collection('B737_300_CABIN_STUDY');g.use(col)
-    col['layout']='Illustrative 23 rows x 6 seats = 138, 0.86 m pitch; not airline-specific.'
-    g.cube('Cabin floor',(16.1,0,2.63),(22.5,3.43,.10),m['carpet'],.02)
-    # Sidewall segments and ceiling arch; open at both ends for easy editing.
-    for side in [-1,1]:
-        rings=[]
-        for x in [4.9,27.3]:
-            rings.append([(x,side*1.75*cos(-.32+j*1.66/32),3.155+1.87*sin(-.32+j*1.66/32)) for j in range(33)])
-        verts=rings[0]+rings[1]
-        g.mesh('Cabin inner liner_'+str(side),verts,[(j,j+1,33+j+1,33+j) for j in range(32)],m['lining'])
-    # Crown closes the center roof strip above the indirect-light coves.
-    ceiling=[]
-    for x in [4.9,27.3]:
-        ceiling.extend([(x,1.75*cos(1.15+j*(pi-2.30)/40),3.155+1.87*sin(1.15+j*(pi-2.30)/40)) for j in range(41)])
-    g.mesh('Cabin ceiling crown',ceiling,[(j,j+1,41+j+1,41+j) for j in range(40)],m['lining'])
-    for i in range(15):
-        x=5.1+i*1.48
-        g.curve(f'Ceiling panel joint_{i}',[(x,1.75*cos(1.14+j*(pi-2.28)/40),3.155+1.865*sin(1.14+j*(pi-2.28)/40)) for j in range(41)],m['wing'],.003)
-    for row in range(23):
-        x=6.15+row*.86
-        for side in [-1,1]:
-            for j,y in enumerate([.52,.99,1.46]):seat(m,f'Seat_{row+1:02}_{"ABC"[j] if side<0 else "DEF"[j]}',x,side*y,2.68)
-        # Floor track and low aisle lighting.
-    for y in [-1.38,-.61,.61,1.38]:g.cube('Seat track',(16,y,2.689),(20.8,.023,.009),m['metal'],0)
-    for side in [-1,1]:
-        g.cube('Aisle emergency light_'+str(side),(16,side*.28,2.694),(21,.015,.009),m['cabinlight'],.004)
-        for row in range(14):
-            x=5.85+row*1.48
-            obj=g.cube(f'Overhead bin_{side}_{row}',(x,side*1.23,4.52),(1.455,.67,.49),m['lining'],.095)
-            # Closed curved-look door, handle, and passenger service unit.
-            g.cube(f'Bin handle_{side}_{row}',(x,side*.883,4.42),(.16,.024,.026),m['metal'],.009)
-            g.cube(f'PSU_{side}_{row}',(x,side*1.22,4.258),(.78,.31,.028),m['wing'],.014)
-            for dx in [-.22,0,.22]:
-                g.cylinder('Air vent',(x+dx,side*1.25,4.240),(x+dx,side*1.25,4.218),.033,m['dark'],24)
-                g.cylinder('Reading light',(x+dx,side*1.1,4.239),(x+dx,side*1.1,4.218),.028,m['lamp'],24)
-        g.cube('Indirect ceiling light_'+str(side),(16,side*.86,4.78),(21.3,.045,.04),m['cabinlight'],.01)
-        for i in range(44):
-            x=5.95+i*.508
-            if x>27:continue
-            outline=g.rounded_rect(x,3.66,.28,.405,.08,6)
-            pts=[(a,side*(1.75*(max(.001,1-((b-3.155)/1.87)**2))**.5-.009),b) for a,b in outline]
-            g.mesh(f'Cabin window_{side}_{i}',pts,[tuple(range(len(pts)))],m['lamp'])
-            g.curve(f'Cabin window surround_{side}_{i}',pts,m['white'],.026,True)
-    for x in [5.1,27.1]:
-        for side in [-1,1]:
-            g.cube('Galley cabinet',(x,side*1.10,3.57),(.65,.93,1.78),m['lining'],.035)
-            for z in [3.0,3.5,4.0]:
-                g.cube('Galley door',(x+(.335 if x<10 else -.335),side*1.10,z),(.018,.81,.42),m['wing'],.016)
-        g.cube('Exit sign panel',(x,0,4.39),(.06,.59,.14),m['dark'],.008)
-        g.text('Exit sign','EXIT',(x-.035,0,4.35),.10,m['cabinlight'],(pi/2,0,-pi/2))
-    for x in [6,9,12,15,18,21,24,26]:light('Cabin ceiling wash',(x,0,4.87),(x,0,2.7),65,1.2)
-    return scene_for('03 | Cabin study - 138 seats',col,(26.30,0,4.03),(10,0,3.85),23)

@@ -34,10 +34,13 @@ checks={
     'studio_hidden_only_in_viewport':bpy.data.collections['90_Studio'].hide_viewport and not bpy.data.collections['90_Studio'].hide_render,
 }
 if 'B737_300_CABIN_STUDY' in bpy.data.collections:
-    seats=[o for o in bpy.data.collections['B737_300_CABIN_STUDY'].objects if o.name.startswith('Seat_') and o.name.endswith(' cushion')]
-    checks['cabin_138_seat_cushions']=len(seats)==138
-    checks['three_scenes_saved']=len(bpy.data.scenes)==3
-    checks['interiors_separate_from_exterior']=not any(o.name.startswith('Seat_') for o in objects)
+    cabin=bpy.data.collections['B737_300_CABIN_STUDY']
+    seats=[o for o in cabin.all_objects if o.name.startswith('Seat_') and o.name.endswith(' cushion')]
+    cfg=json.loads((ROOT/'config'/'aircraft.json').read_text())['cabin']
+    checks['configured_seat_count']=len(seats)==cfg['rows']*6
+    checks['four_scenes_saved']=len(bpy.data.scenes)==4
+    checks['passenger_cabin_in_aircraft_scene']=all(o.name in scene.objects for o in seats)
+    checks['cabin_separate_editable_collection']=not any(o.name.startswith('Seat_') for o in objects)
 result={'file':str(path),'bytes':path.stat().st_size,'blender':bpy.app.version_string,
     'scenes':[s.name for s in bpy.data.scenes],'checks':checks,'passed':all(checks.values()),
     'engine_ground_clearance_m':min(v.co.z for v in left.data.vertices)}

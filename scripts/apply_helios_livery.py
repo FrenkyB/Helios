@@ -42,7 +42,10 @@ def paint(name,all_blue=False):
             if isinstance(v,(float,int)):q.inputs[i].default_value=v
             else:l.new(v,q.inputs[i])
         return q.outputs[0]
-    pos=node('ShaderNodeNewGeometry');sep=node('ShaderNodeSeparateXYZ');l.new(pos.outputs['Position'],sep.inputs[0])
+    # Stored aircraft coordinates keep the paint attached when the aircraft is
+    # moved, rotated or collection-instanced into an airport scene.
+    pos=node('ShaderNodeAttribute');pos.attribute_name='Helios_rest_position'
+    sep=node('ShaderNodeSeparateXYZ');l.new(pos.outputs['Vector'],sep.inputs[0])
     x,z=sep.outputs['X'],sep.outputs['Z']
     # The diagonal blue boundary wraps continuously around the aft fuselage.
     mask=1 if all_blue else op('GREATER_THAN',op('ADD',x,op('MULTIPLY',z,.40)),25.6)
@@ -77,6 +80,10 @@ def main():
     tail=paint('HELIOS | fin blue gold rings',True)
     bpy.data.objects['Fuselage | continuous quad loft'].data.materials[0]=fuselage
     for name in ['Vertical fin with dorsal fillet','Rudder']:bpy.data.objects[name].data.materials[0]=tail
+    for name in ['Fuselage | continuous quad loft','Vertical fin with dorsal fillet','Rudder']:
+        obj=bpy.data.objects[name]
+        attribute=obj.data.attributes.get('Helios_rest_position') or obj.data.attributes.new('Helios_rest_position','FLOAT_VECTOR','POINT')
+        for vertex,value in zip(obj.data.vertices,attribute.data):value.vector=obj.matrix_world@vertex.co
     for side in ['L','R']:
         bpy.data.objects['CFM56-3 nacelle_'+side].data.materials[0]=blue
         for name in ['Aft door_'+side,'Exit stencil_Aft door_'+side]:

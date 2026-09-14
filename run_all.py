@@ -1,4 +1,4 @@
-"""Build the Helios 737-300, passenger cabin and Classic flight deck with one command."""
+"""Build the Helios 737-300, interiors and Larnaca airport with one command."""
 from pathlib import Path
 import argparse
 import datetime
@@ -49,22 +49,26 @@ def main():
     parser.add_argument('--draft', action='store_true', help='Faster previews')
     parser.add_argument('--views', default='hero,side,front,top,rear,engine,nose', help='Exterior views for --base-only')
     parser.add_argument('--exterior-only', action='store_true', help='Omit interior scenes on regeneration')
+    parser.add_argument('--airport-views', default='airport_overview,layout,terminal_aerial,helios_gate,forecourt,tower,runway_04',
+                        help='Comma-separated airport preview cameras')
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--base-only', action='store_true', help='Build only the unpainted base model')
     mode.add_argument('--correct-cockpit', action='store_true', help='Run the existing glazing correction only')
     mode.add_argument('--helios-livery', action='store_true', help='Run the existing livery stage only')
     mode.add_argument('--passenger-cabin', action='store_true', help='Upgrade only the cabin in an existing Helios model')
     mode.add_argument('--cockpit-interior', action='store_true', help='Build only the fitted 737 Classic cockpit interior')
-    parser.add_argument('--source', help='Input .blend for an individual correction, livery, cabin or cockpit stage')
+    mode.add_argument('--airport-only', action='store_true', help='Update Larnaca in the saved Helios model, preserving aircraft')
+    parser.add_argument('--source', help='Input .blend for an individual correction, livery, cabin, cockpit or airport stage')
     args = parser.parse_args()
-    if args.source and not (args.correct_cockpit or args.helios_livery or args.passenger_cabin or args.cockpit_interior):
-        parser.error('--source requires an individual correction, livery, cabin or cockpit stage')
-    if args.exterior_only and (args.correct_cockpit or args.helios_livery or args.passenger_cabin or args.cockpit_interior):
+    individual = args.correct_cockpit or args.helios_livery or args.passenger_cabin or args.cockpit_interior or args.airport_only
+    if args.source and not individual:
+        parser.error('--source requires an individual correction, livery, cabin, cockpit or airport stage')
+    if args.exterior_only and individual:
         parser.error('--exterior-only applies to regeneration, not individual edit stages')
     blender = find_blender(args.blender)
     (ROOT / 'logs').mkdir(exist_ok=True)
     (ROOT / 'reports').mkdir(exist_ok=True)
-    names = (['Boeing_737-300_Helios_Livery.blend'] if args.helios_livery or args.passenger_cabin or args.cockpit_interior else
+    names = (['Boeing_737-300_Helios_Livery.blend'] if args.helios_livery or args.passenger_cabin or args.cockpit_interior or args.airport_only else
              ['Boeing_737-300.blend'] if args.correct_cockpit else
              ['HEL-1_Boeing_737-300.blend'] if args.base_only else
              ['HEL-1_Boeing_737-300.blend', 'Boeing_737-300.blend', 'Boeing_737-300_Helios_Livery.blend'])
@@ -76,6 +80,11 @@ def main():
             shutil.copy2(path, backup / name)
     common = (['--skip-render'] if args.skip_render else []) + (['--draft'] if args.draft else [])
     source = ['--source', str(Path(args.source).resolve())] if args.source else []
+    airport_args = common + ['--views', args.airport_views]
+    if args.airport_only:
+        run(blender, 'build_larnaca.py', 'larnaca.log', source + airport_args)
+        print('Finished:', ROOT / 'models' / 'Boeing_737-300_Helios_Livery.blend')
+        return
     if args.cockpit_interior:
         run(blender, 'update_classic_cockpit.py', 'classic_cockpit.log', source + common)
         run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log')
@@ -106,6 +115,7 @@ def main():
         run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log')
         if not args.skip_render:
             run(blender, 'render_passenger_cabin.py', 'passenger_renders.log', ['--draft'] if args.draft else [])
+    run(blender, 'build_larnaca.py', 'larnaca.log', airport_args)
     print('Finished:', ROOT / 'models' / 'Boeing_737-300_Helios_Livery.blend')
 
 

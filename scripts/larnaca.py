@@ -5,11 +5,13 @@ then parented to one georeferencing empty. Aircraft datablocks stay untouched.
 """
 import math
 import random
+import sys
 from pathlib import Path
 
 import bpy
 from mathutils import Vector
 import geometry as g
+import larnaca_landscape
 
 PREFIX = 'LCA | '
 COLLECTION = 'LARNACA_AIRPORT'
@@ -62,12 +64,21 @@ def label(name, text, pos, size, material='white', rotation=(0, 0, 0)):
 def polygon(name, points, z, material):
     if material in {'salt', 'lagoon'}:
         # Corner-cutting yields quiet, irregular shorelines without dense terrain.
-        for _ in range(3):
+        for _ in range(4):
             refined=[]
             for a,b in zip(points,points[1:]+points[:1]):
                 refined.extend([(a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25),
                                 (a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75)])
             points=refined
+        # A gently eroded edge avoids perfectly smooth, diagram-like lake outlines.
+        center=Vector((sum(p[0] for p in points)/len(points),sum(p[1] for p in points)/len(points)))
+        edge=[]
+        for i,p in enumerate(points):
+            direction=(Vector(p)-center).normalized()
+            a=math.tau*i/len(points)
+            offset=12*math.sin(7*a+.4)+7*math.sin(13*a+1.2)+4*math.sin(19*a)
+            edge.append(tuple(Vector(p)+direction*offset))
+        points=edge
     return mesh(name, [(x, y, z) for x, y in points], [tuple(range(len(points)))], material)
 
 
@@ -119,11 +130,11 @@ def material(name, color, roughness=.6, metal=0, noise=0, scale=1):
 
 
 def materials():
-    material('soil', (.38, .29, .16), noise=.5, scale=.055)
-    material('scrub', (.23, .25, .105), noise=.6, scale=.10)
-    material('asphalt', (.105, .12, .13), noise=.32, scale=2.2)
+    material('soil', (.19, .215, .095), noise=.32, scale=.025)
+    material('scrub', (.125, .185, .055), noise=.35, scale=.07)
+    material('asphalt', (.038, .046, .052), noise=.20, scale=2.2)
     material('shoulder', (.18, .175, .145), noise=.25, scale=.4)
-    material('concrete', (.52, .51, .45), noise=.2, scale=.7)
+    material('concrete', (.43, .445, .40), noise=.12, scale=.7)
     for i in range(6):
         material('slab'+str(i), (.46+i*.013, .455+i*.013, .405+i*.013), noise=.1, scale=1)
     material('joint', (.18, .18, .16))
@@ -132,7 +143,7 @@ def materials():
     material('red', (.63, .055, .025))
     material('rubber', (.047, .052, .053), noise=.45, scale=2)
     material('wall', (.74, .72, .63), noise=.07, scale=.6)
-    material('roof', (.48, .55, .60), .32, .55)
+    material('roof', (.62, .68, .69), .36, .35)
     material('steel', (.58, .62, .62), .28, .7)
     material('darksteel', (.095, .12, .12), .38, .65)
     material('glass', (.055, .18, .21), .18, .48)
@@ -140,9 +151,15 @@ def materials():
     material('green', (.105, .18, .055), noise=.3, scale=.8)
     material('trunk', (.26, .19, .09), noise=.3, scale=3)
     material('sand', (.61, .53, .35), noise=.2, scale=.08)
-    material('salt', (.62, .59, .45), noise=.3, scale=.03)
-    material('water', (.035, .20, .26), .23, .25, noise=.22, scale=.013)
-    material('lagoon', (.20, .28, .25), .38, .1, noise=.35, scale=.012)
+    material('salt', (.43, .425, .31), noise=.25, scale=.03)
+    material('water', (.025, .15, .21), .22, .05, noise=.1, scale=.07)
+    lagoon=material('lagoon', (.06, .17, .145), .25, .02, noise=.32, scale=.008)
+    lagoon.node_tree.nodes.get('Principled BSDF').inputs['Specular IOR Level'].default_value=.42
+    for i, color in enumerate([(.12,.18,.055),(.20,.24,.09),(.27,.265,.12),(.16,.22,.07),(.29,.27,.16)]):
+        material('field'+str(i), color, noise=.20, scale=.045)
+    for i, color in enumerate([(.055,.115,.025),(.10,.17,.045),(.14,.19,.065),(.085,.135,.04)]):
+        material('foliage'+str(i), color, noise=.18, scale=1.1)
+    material('terracotta', (.34,.15,.07), noise=.14, scale=.6)
     MATS['light'] = g.material(PREFIX+'light', (1, .85, .55), 0, .3, emission=3)
     MATS['greenlight'] = g.material(PREFIX+'greenlight', (.08, 1, .22), 0, .3, emission=3)
 
@@ -151,24 +168,22 @@ def terrain(cfg):
     polygon('Mediterranean sea', [(-4500,-4500),(8500,-4500),(8500,8500),(-4500,8500)], -1.3, 'water')
     coast = [(2600,-2200),(2610,-1500),(2710,-1000),(2770,-650),(2900,-470),
              (3010,-230),(3100,-75),(3300,50),(3590,350),(4010,780),(4500,1800),(5700,4200)]
-    polygon('Cyprus coastal terrain', [(-4500,-2200),*coast,(5700,8500),(-4500,8500)], -.06, 'soil')
-    ribbon('Beach sand', coast, 42, -.05, 'sand')
+    # Decimetre separation remains stable in kilometre-wide orthographic views.
+    # The original salt/water planes differed by only one millimetre.
+    polygon('Cyprus coastal terrain', [(-4500,-2200),*coast,(5700,8500),(-4500,8500)], -.5, 'soil')
+    ribbon('Beach sand', coast, 42, -.3, 'sand')
     polygon('Orphani salt pan', [(-1500,-1300),(1200,-1400),(2400,-750),(2180,-460),
-                               (900,-260),(-300,-410)], -.049, 'salt')
+                               (900,-260),(-300,-410)], -.3, 'salt')
     polygon('Orphani shallow water', [(-1000,-1100),(950,-1170),(2030,-750),(1800,-570),
-                                    (800,-400),(-120,-550)], -.048, 'lagoon')
-    polygon('Airport salt lake', [(1150,760),(1470,740),(1600,950),(1550,1600),(1120,1480),(990,1000)], -.048, 'salt')
-    polygon('Airport salt lake water', [(1220,820),(1430,810),(1510,1020),(1450,1440),(1190,1370),(1110,1020)], -.047, 'lagoon')
-    rng = random.Random(522)
-    for i in range(85):
-        u = rng.uniform(-850, 3300)
-        v = rng.choice([rng.uniform(-240, -110), rng.uniform(45, 150)])
-        points = [(u+math.cos(j*math.tau/9)*rng.uniform(12, 36),
-                   v+math.sin(j*math.tau/9)*rng.uniform(8, 23)) for j in range(9)]
-        if u < 2820:polygon('Dry grass patch %03d'%i, points, -.045, 'scrub')
+                                    (800,-400),(-120,-550)], -.12, 'lagoon')
+    polygon('Airport salt lake', [(1150,760),(1470,740),(1600,950),(1550,1600),(1120,1480),(990,1000)], -.3, 'salt')
+    polygon('Airport salt lake water', [(1220,820),(1430,810),(1510,1020),(1450,1440),(1190,1370),(1110,1020)], -.12, 'lagoon')
+    # Grass variation lives in the soil shader, avoiding overlapping patch meshes.
+    for i,(v0,v1) in enumerate([(38,175),(213,277)]):
+        polygon('Managed airfield grass '+str(i),[(0,v0),(2994,v0),(2994,v1),(0,v1)],-.25,'field3')
     for i in range(12):
         u=-650+(i%4)*190; v=1100+(i//4)*260
-        polygon('Agricultural plot %02d'%i, [(u,v),(u+176,v+10),(u+160,v+224),(u+4,v+219)], -.044,
+        polygon('Agricultural plot %02d'%i, [(u,v),(u+176,v+10),(u+160,v+224),(u+4,v+219)], -.25,
                 'scrub' if i%3 else 'soil')
 
 
@@ -258,16 +273,18 @@ def taxiways(cfg):
 
 def apron(cfg):
     z=cfg['apron_height']
-    # Broad apron base, then jointed slab areas either side of the pier.
-    polygon('Apron 1 base',[(-20,330),(730,330),(740,710),(610,725),(520,675),(275,675),(190,720),(-20,720)],z,'concrete')
+    # Keep the broad apron base below the jointed slabs. When the two large
+    # flat surfaces are nearly coplanar, tilted viewport angles show z-fighting.
+    slab_z = z + .005
+    polygon('Apron 1 base',[(-20,330),(730,330),(740,710),(610,725),(520,675),(275,675),(190,720),(-20,720)],z-.08,'concrete')
     for tag,(x0,x1,y0,y1) in {'West':(230,374,350,650),'East':(426,662,350,685),
                              'Remote':(-12,114,350,705)}.items():
         verts=[];faces=[];inds=[];rng=random.Random(tag)
         for x in range(x0,x1,10):
             for y in range(y0,y1,10):
                 k=len(verts);gap=.025
-                verts.extend([(x+gap,y+gap,z+.005),(min(x+10,x1)-gap,y+gap,z+.005),
-                              (min(x+10,x1)-gap,min(y+10,y1)-gap,z+.005),(x+gap,min(y+10,y1)-gap,z+.005)])
+                verts.extend([(x+gap,y+gap,slab_z),(min(x+10,x1)-gap,y+gap,slab_z),
+                              (min(x+10,x1)-gap,min(y+10,y1)-gap,slab_z),(x+gap,min(y+10,y1)-gap,slab_z)])
                 faces.append((k,k+1,k+2,k+3));inds.append(rng.randrange(6))
         obj=mesh('Jointed concrete '+tag,verts,faces,'slab0')
         for i in range(1,6):obj.data.materials.append(MATS['slab'+str(i)])
@@ -542,7 +559,7 @@ def world_point(local,cfg):
 
 def cameras(scene,cfg):
     specs={
-        'airport_overview':((2050,-2050,2450),(1370,350,0),55,4600),
+        'airport_overview':((2050,-2050,2450),(1370,280,0),55,4050),
         'layout':((1350,420,4200),(1350,420,0),50,4500),
         'terminal_aerial':((-150,-20,450),(390,565,5),46,None),
         'helios_gate':((266,505,7.5),(337,548,6),43,None),
@@ -563,18 +580,24 @@ def cameras(scene,cfg):
     sky=nodes.new('ShaderNodeTexSky')
     sky_types=sky.bl_rna.properties['sky_type'].enum_items.keys()
     sky.sky_type='MULTIPLE_SCATTERING' if 'MULTIPLE_SCATTERING' in sky_types else 'NISHITA'
-    sky.sun_elevation=math.radians(38);sky.sun_rotation=math.radians(210)
+    elevation=math.radians(cfg.get('sun_elevation', 26))
+    azimuth=math.radians(cfg.get('sun_azimuth', 225))
+    sky.sun_elevation=elevation;sky.sun_rotation=azimuth
     sky.altitude=.02;sky.air_density=1
     if hasattr(sky,'aerosol_density'):sky.aerosol_density=1.7
     else:sky.dust_density=1.7
     sky.sun_disc=False
-    world.node_tree.links.new(sky.outputs[0],nodes['Background'].inputs[0]);nodes['Background'].inputs[1].default_value=.035
-    sun_data=bpy.data.lights.new(PREFIX+'Mediterranean sun','SUN');sun_data.energy=3.1;sun_data.angle=.025
-    sun=bpy.data.objects.new(PREFIX+'Mediterranean sun',sun_data);COL.objects.link(sun);sun.rotation_euler=(.5,-.4,-.5)
+    world.node_tree.links.new(sky.outputs[0],nodes['Background'].inputs[0]);nodes['Background'].inputs[1].default_value=.06
+    sun_data=bpy.data.lights.new(PREFIX+'Mediterranean sun','SUN');sun_data.energy=3.0;sun_data.angle=math.radians(1.2)
+    sun_data.color=(1.0,.94,.85)
+    sun=bpy.data.objects.new(PREFIX+'Mediterranean sun',sun_data);COL.objects.link(sun)
+    direction=Vector((math.cos(elevation)*math.cos(azimuth),math.cos(elevation)*math.sin(azimuth),math.sin(elevation)))
+    sun.rotation_euler=(-direction).to_track_quat('-Z','Y').to_euler()
     scene.render.engine='CYCLES';scene.cycles.samples=cfg['render_samples'];scene.cycles.use_denoising=True;scene.cycles.max_bounces=5
     scene.render.resolution_x,scene.render.resolution_y=cfg['render_resolution'];scene.render.resolution_percentage=100
     scene.view_settings.view_transform='AgX';scene.render.image_settings.file_format='PNG'
     scene.view_settings.look='AgX - Medium High Contrast'
+    scene.view_settings.exposure=cfg.get('exposure', .65)
     prefs=bpy.context.preferences.addons['cycles'].preferences
     for backend in ['OPTIX','CUDA','HIP','ONEAPI']:
         try:
@@ -616,7 +639,8 @@ def build(cfg):
     materials()
     for name,fn in [('01 Terrain coastline salt lakes',terrain),('02 Runway 04-22',runway),
                     ('03 Aprons stands',apron),('04 Taxiways',taxiways),('05 Terminal exterior',terminal),
-                    ('07 Control tower',tower),('08 Forecourt roads parking',forecourt),('09 Airside equipment',airside)]:
+                    ('07 Control tower',tower),('08 Forecourt roads parking',forecourt),('09 Airside equipment',airside),
+                    ('12 Surrounding landscape',lambda settings: larnaca_landscape.build(sys.modules[__name__], settings))]:
         group(name,root);print('BUILD LARNACA',name,flush=True);fn(cfg)
     group('06 Passenger boarding bridges',root)
     for side,tags in [(-1,['27','26','25','24','23']),(1,['47','46','45','44','42'])]:
@@ -658,9 +682,18 @@ def build(cfg):
             if area.type=='VIEW_3D':
                 # Thousands of child-to-origin guides obscure the airport.
                 area.spaces.active.overlay.show_relationship_lines=False
-                area.spaces.active.clip_end=20000;area.spaces.active.clip_start=.1
+                area.spaces.active.overlay.show_floor=False
+                area.spaces.active.overlay.show_axis_x=False
+                area.spaces.active.overlay.show_axis_y=False
+                area.spaces.active.overlay.show_axis_z=False
+                if hasattr(area.spaces.active.overlay, 'show_ortho_grid'):
+                    area.spaces.active.overlay.show_ortho_grid=False
+                area.spaces.active.clip_end=20000;area.spaces.active.clip_start=1
                 area.spaces.active.region_3d.view_distance=165
                 area.spaces.active.region_3d.view_location=world_point((360,544,8),cfg)
                 area.spaces.active.region_3d.view_rotation=scene.camera.rotation_euler.to_quaternion()
                 area.spaces.active.shading.color_type='MATERIAL'
+                area.spaces.active.shading.type='MATERIAL'
+                area.spaces.active.shading.use_scene_world=True
+                area.spaces.active.shading.use_scene_lights=True
     return scene

@@ -1,122 +1,168 @@
-"""Build the Helios 737-300, interiors and Larnaca airport with one command."""
+"""Open this file in Blender's Text Editor and click Run Script.
+
+Builds, verifies, saves and opens the complete Helios aircraft and Larnaca scene.
+No external Python installation, command-line arguments or preview renders needed.
+"""
 from pathlib import Path
-import argparse
 import datetime
-import os
 import shutil
 import subprocess
+import traceback
 
-ROOT = Path(__file__).resolve().parent
-
-
-def find_blender(explicit):
-    candidates = [explicit, os.environ.get('BLENDER_EXE'), shutil.which('blender')]
-    base = Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'Blender Foundation'
-    if base.exists():
-        candidates.extend(str(p) for p in sorted(base.glob('Blender */blender.exe'), reverse=True)
-                          if 'out_of_service' not in str(p))
-    candidates.append('/Applications/Blender.app/Contents/MacOS/Blender')
-    for path in candidates:
-        if path and Path(path).is_file():
-            return str(Path(path).resolve())
-    raise SystemExit('Blender not found. Use --blender "C:/path/to/blender.exe"')
+import bpy
 
 
-def run(blender, script, log_name, arguments=()):
-    cmd = [blender, '--background', '--factory-startup', '--python-exit-code', '1',
-           '--python', str(ROOT / 'scripts' / script)]
-    if arguments:
-        cmd += ['--', *arguments]
-    print('BUILD', script, flush=True)
-    with (ROOT / 'logs' / log_name).open('w', encoding='utf-8') as log:
-        with subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                              encoding='utf-8', errors='replace') as process:
-            for line in process.stdout:
-                log.write(line)
-                log.flush()
-                if any(token in line for token in ['VALIDATION', 'VERIFIED', 'RENDER', 'COMPLETE',
-                                                   'Error', 'Traceback', 'Saved', 'Render device']):
-                    print(line.rstrip(), flush=True)
-            code = process.wait()
-    if code:
-        raise SystemExit(f'{script} failed ({code}). Read logs/{log_name}')
+def project_root():
+    # Blender may set __file__ to the text block name rather than its full path.
+    text = getattr(bpy.context.space_data, 'text', None)
+    path = bpy.path.abspath(text.filepath) if text and text.filepath else __file__
+    return Path(path).resolve().parent
+
+
+ROOT = project_root()
+OUTPUT = ROOT / 'models' / 'Boeing_737-300_Helios_Livery.blend'
+STATE_KEY = '_helios_run_all_build'
+STAGES = (
+    ('Letalo in kabina', 'build_aircraft.py', 'run_all.log', ['--skip-render']),
+    ('Preverjanje letala', 'verify_saved.py', 'verification.log', []),
+    ('Pilotska okna', 'correct_cockpit_windows.py', 'cockpit_correction.log', ['--skip-render']),
+    ('Preverjanje oken', 'verify_cockpit_correction.py', 'cockpit_preservation.log', []),
+    ('Helios poslikava', 'apply_helios_livery.py', 'helios_livery.log', ['--skip-render']),
+    ('Cockpit 737 Classic', 'update_classic_cockpit.py', 'classic_cockpit.log', ['--skip-render']),
+    ('Preverjanje kabine', 'verify_passenger_cabin.py', 'passenger_verification.log', []),
+    ('Letalisce Larnaca', 'build_larnaca.py', 'larnaca.log', ['--skip-render']),
+)
+
+
+def message(title, lines, icon='INFO'):
+    print(title + ': ' + ' | '.join(lines), flush=True)
+
+    def draw(self, context):
+        for line in lines:
+            self.layout.label(text=line)
+
+    windows = bpy.context.window_manager.windows
+    if windows:
+        with bpy.context.temp_override(window=windows[0]):
+            bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--blender', help='Path to Blender executable (validated with 5.2)')
-    parser.add_argument('--skip-render', action='store_true', help='Build and verify without previews')
-    parser.add_argument('--draft', action='store_true', help='Faster previews')
-    parser.add_argument('--views', default='hero,side,front,top,rear,engine,nose', help='Exterior views for --base-only')
-    parser.add_argument('--exterior-only', action='store_true', help='Omit interior scenes on regeneration')
-    parser.add_argument('--airport-views', default='airport_overview,layout,terminal_aerial,helios_gate,forecourt,tower,runway_04',
-                        help='Comma-separated airport preview cameras')
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument('--base-only', action='store_true', help='Build only the unpainted base model')
-    mode.add_argument('--correct-cockpit', action='store_true', help='Run the existing glazing correction only')
-    mode.add_argument('--helios-livery', action='store_true', help='Run the existing livery stage only')
-    mode.add_argument('--passenger-cabin', action='store_true', help='Upgrade only the cabin in an existing Helios model')
-    mode.add_argument('--cockpit-interior', action='store_true', help='Build only the fitted 737 Classic cockpit interior')
-    mode.add_argument('--airport-only', action='store_true', help='Update Larnaca in the saved Helios model, preserving aircraft')
-    parser.add_argument('--source', help='Input .blend for an individual correction, livery, cabin, cockpit or airport stage')
-    args = parser.parse_args()
-    individual = args.correct_cockpit or args.helios_livery or args.passenger_cabin or args.cockpit_interior or args.airport_only
-    if args.source and not individual:
-        parser.error('--source requires an individual correction, livery, cabin, cockpit or airport stage')
-    if args.exterior_only and individual:
-        parser.error('--exterior-only applies to regeneration, not individual edit stages')
-    blender = find_blender(args.blender)
-    (ROOT / 'logs').mkdir(exist_ok=True)
-    (ROOT / 'reports').mkdir(exist_ok=True)
-    names = (['Boeing_737-300_Helios_Livery.blend'] if args.helios_livery or args.passenger_cabin or args.cockpit_interior or args.airport_only else
-             ['Boeing_737-300.blend'] if args.correct_cockpit else
-             ['HEL-1_Boeing_737-300.blend'] if args.base_only else
-             ['HEL-1_Boeing_737-300.blend', 'Boeing_737-300.blend', 'Boeing_737-300_Helios_Livery.blend'])
+    if bpy.app.background:
+        raise RuntimeError('Open run_all.py in Blender Text Editor and click Run Script.')
+    namespace = bpy.app.driver_namespace
+    if STATE_KEY in namespace:
+        message('Helios', ['Izdelava ze poteka. Napredek je v spodnji statusni vrstici.'])
+        return
+    if not all((ROOT / 'scripts' / stage[1]).is_file() for stage in STAGES):
+        message('Mapa projekta ni najdena', [
+            'S Text > Open odpri run_all.py iz mape ChatGpt/GitHub.', str(ROOT)], 'ERROR')
+        return
+
     backup = ROOT / 'reports' / 'backups' / datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-    for name in names:
-        path = ROOT / 'models' / name
-        if path.exists():
-            backup.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, backup / name)
-    common = (['--skip-render'] if args.skip_render else []) + (['--draft'] if args.draft else [])
-    source = ['--source', str(Path(args.source).resolve())] if args.source else []
-    airport_args = common + ['--views', args.airport_views]
-    if args.airport_only:
-        run(blender, 'build_larnaca.py', 'larnaca.log', source + airport_args)
-        print('Finished:', ROOT / 'models' / 'Boeing_737-300_Helios_Livery.blend')
+    try:
+        backup.mkdir(parents=True)
+        (ROOT / 'logs').mkdir(exist_ok=True)
+        for name in ('HEL-1_Boeing_737-300.blend', 'Boeing_737-300.blend', OUTPUT.name):
+            path = ROOT / 'models' / name
+            if path.exists():
+                shutil.copy2(path, backup / name)
+    except OSError as exc:
+        message('Izdelava se ni zacela', [str(exc)], 'ERROR')
         return
-    if args.cockpit_interior:
-        run(blender, 'update_classic_cockpit.py', 'classic_cockpit.log', source + common)
-        run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log')
-        return
-    if args.passenger_cabin:
-        run(blender, 'update_passenger_cabin.py', 'passenger_cabin.log', source + common)
-        return
-    if args.helios_livery:
-        run(blender, 'apply_helios_livery.py', 'helios_livery.log', source + common)
-        return
-    if args.correct_cockpit:
-        run(blender, 'correct_cockpit_windows.py', 'cockpit_correction.log', source + common)
-        run(blender, 'verify_cockpit_correction.py', 'cockpit_preservation.log', source)
-        return
-    build_args = (common + ['--views', args.views]) if args.base_only else ['--skip-render']
-    if args.exterior_only:
-        build_args.append('--exterior-only')
-    run(blender, 'build_aircraft.py', 'run_all.log', build_args)
-    run(blender, 'verify_saved.py', 'verification.log')
-    if args.base_only:
-        print('Finished:', ROOT / 'models' / 'HEL-1_Boeing_737-300.blend')
-        return
-    run(blender, 'correct_cockpit_windows.py', 'cockpit_correction.log', ['--skip-render'])
-    run(blender, 'verify_cockpit_correction.py', 'cockpit_preservation.log')
-    run(blender, 'apply_helios_livery.py', 'helios_livery.log', common)
-    if not args.exterior_only:
-        run(blender, 'update_classic_cockpit.py', 'classic_cockpit.log', common)
-        run(blender, 'verify_passenger_cabin.py', 'passenger_verification.log')
-        if not args.skip_render:
-            run(blender, 'render_passenger_cabin.py', 'passenger_renders.log', ['--draft'] if args.draft else [])
-    run(blender, 'build_larnaca.py', 'larnaca.log', airport_args)
-    print('Finished:', ROOT / 'models' / 'Boeing_737-300_Helios_Livery.blend')
+
+    state = {'index': 0, 'process': None}
+    namespace[STATE_KEY] = state
+    error_log = ROOT / 'logs' / 'blender_launcher.log'
+    error_log.write_text('Helios build started from Blender Text Editor.\n', encoding='utf-8')
+
+    def status(text=None):
+        for window in bpy.context.window_manager.windows:
+            with bpy.context.temp_override(window=window):
+                window.workspace.status_text_set(text)
+
+    def show_result():
+        # Loading a .blend invalidates the current UI context until the next tick.
+        # This callback must run after open_mainfile has returned to Blender.
+        window = bpy.context.window_manager.windows[0]
+        with bpy.context.temp_override(window=window):
+            configure_result(window)
+        return None
+
+    def configure_result(window):
+        scene = bpy.data.scenes['05 | Larnaca - Helios Flight 522']
+        window.scene = scene
+        camera = bpy.data.objects.get('LCA | Camera airport_overview')
+        if camera:
+            scene.camera = camera
+        for screen in bpy.data.screens:
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    space = area.spaces.active
+                    space.overlay.show_relationship_lines = False
+                    space.overlay.show_floor = False
+                    space.overlay.show_axis_x = False
+                    space.overlay.show_axis_y = False
+                    space.overlay.show_axis_z = False
+                    if hasattr(space.overlay, 'show_ortho_grid'):
+                        space.overlay.show_ortho_grid = False
+                    space.clip_start = 1.0
+                    space.clip_end = 20000
+                    space.shading.color_type = 'MATERIAL'
+                    space.shading.type = 'MATERIAL'
+                    space.shading.use_scene_world = True
+                    space.shading.use_scene_lights = True
+                    space.region_3d.view_perspective = 'CAMERA'
+                elif area.type == 'TEXT_EDITOR':
+                    text = bpy.data.texts.get('run_all.py') or bpy.data.texts.load(str(ROOT / 'run_all.py'))
+                    area.spaces.active.text = text
+        # Save the visible airport scene and keep the script available for the next run.
+        bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
+        message('Helios je pripravljen', ['Letalo in Larnaca sta izdelana, preverjena in shranjena.', str(OUTPUT)])
+
+    def finish():
+        # Preserve even edits made while the build was running before opening its result.
+        bpy.ops.wm.save_as_mainfile(filepath=str(backup / 'Open_session_before_result.blend'), copy=True)
+        bpy.app.timers.register(show_result, first_interval=0.5, persistent=True)
+        bpy.ops.wm.open_mainfile(filepath=str(OUTPUT), load_ui=False)
+
+    def poll():
+        try:
+            process = state['process']
+            if process is not None:
+                code = process.poll()
+                if code is None:
+                    return 0.5
+                if code:
+                    log = ROOT / 'logs' / STAGES[state['index']][2]
+                    raise RuntimeError(f'{STAGES[state["index"]][1]}: exit code {code}. Log: {log}')
+                state['index'] += 1
+                state['process'] = None
+            if state['index'] == len(STAGES):
+                status()
+                namespace.pop(STATE_KEY, None)
+                finish()
+                return None
+            title, script, log_name, arguments = STAGES[state['index']]
+            status(f'Helios {state["index"] + 1}/{len(STAGES)}: {title} ...')
+            cmd = [bpy.app.binary_path, '--background', '--factory-startup',
+                   '--python-exit-code', '1', '--python', str(ROOT / 'scripts' / script)]
+            if arguments:
+                cmd += ['--', *arguments]
+            with (ROOT / 'logs' / log_name).open('w', encoding='utf-8') as log:
+                state['process'] = subprocess.Popen(
+                    cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT,
+                    creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+            return 0.5
+        except Exception as exc:
+            namespace.pop(STATE_KEY, None)
+            status()
+            error_log.write_text(traceback.format_exc(), encoding='utf-8')
+            message('Napaka pri izdelavi Helios', [str(exc), str(error_log)], 'ERROR')
+            return None
+
+    bpy.app.timers.register(poll, first_interval=0.2, persistent=True)
+    status('Helios: pripravljam izdelavo letala in letalisca ...')
 
 
 if __name__ == '__main__':

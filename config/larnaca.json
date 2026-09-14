@@ -22,6 +22,9 @@
   "helios_nose_uv": [336.0, 544.0],
   "render_resolution": [1800, 1100],
   "render_samples": 40,
+  "sun_elevation": 26,
+  "sun_azimuth": 225,
+  "exposure": 0.65,
   "reference": "Supplied LARNACA_01/02/03 galleries and notes; Cyprus DCA AIRAC AMDT 001/26, pages 34-36, 47 and 49",
   "coordinate_notes": "Local U runs 04 to 22; V points northwest toward terminal. Airport root rotates local axes into world X east, Y north. Original aircraft study coordinates are preserved.",
   "accuracy_notes": "Runway dimensions, true bearing and displaced thresholds follow supplied AIP. Terminal, tower height, ancillary buildings, shoreline and road geometry are proportioned visual approximations. Gate numbers follow reference groups; not operational scenery."

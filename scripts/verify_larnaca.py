@@ -63,6 +63,19 @@ def verify(path, before=None, baseline=None):
             nonfinite.append(obj.name)
         if any(p.area < 1e-10 for p in obj.data.polygons):
             degenerate.append(obj.name)
+    def surface_z(name):
+        obj = bpy.data.objects[larnaca.PREFIX + name]
+        return max((obj.matrix_world @ vertex.co).z for vertex in obj.data.vertices)
+
+    lake_layers = [
+        ('Orphani salt pan', 'Orphani shallow water'),
+        ('Airport salt lake', 'Airport salt lake water'),
+    ]
+    layer_clearances = {
+        water: surface_z(water) - surface_z(salt) for salt, water in lake_layers
+    }
+    viewports = [area.spaces.active for screen in bpy.data.screens
+                 for area in screen.areas if area.type == 'VIEW_3D']
     checks = {
         'saved_file_reopened': True,
         'runway_2994_by_45_m': abs(extents[0]-2994) < .001 and abs(extents[1]-45) < .001,
@@ -84,6 +97,13 @@ def verify(path, before=None, baseline=None):
         'airport_separate_from_study': not any(o.name.startswith(larnaca.PREFIX) for o in bpy.data.scenes['HEL-1 | Boeing 737-300'].objects),
         'finite_mesh_coordinates': not nonfinite,
         'no_zero_area_mesh_faces': not degenerate,
+        'lake_surfaces_separated': all(clearance >= .1 for clearance in layer_clearances.values()),
+        'salt_pans_above_terrain': all(surface_z(salt)-surface_z('Cyprus coastal terrain') >= .1
+                                      for salt, water in lake_layers),
+        'apron_slabs_above_base': surface_z('Jointed concrete West')-surface_z('Apron 1 base') >= .05,
+        'viewport_floor_and_relationship_lines_hidden': all(
+            not space.overlay.show_floor and not space.overlay.show_relationship_lines
+            and not getattr(space.overlay, 'show_ortho_grid', False) for space in viewports),
     }
     changes = []
     if before is not None:
@@ -98,6 +118,7 @@ def verify(path, before=None, baseline=None):
               'runway_local_dimensions_m': extents, 'runway_true_bearing': bearing,
               'tires_ground_z': tire_floor, 'changed_original_objects': sorted(changes),
               'nonfinite_objects': nonfinite, 'degenerate_objects': degenerate,
+              'lake_layer_clearance_m': layer_clearances,
               'limitations': cfg['accuracy_notes']}
     (ROOT/'reports').mkdir(exist_ok=True)
     (ROOT/'reports'/'larnaca_verification.json').write_text(json.dumps(report, indent=2), encoding='utf-8')

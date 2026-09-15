@@ -1,7 +1,8 @@
 """Open this file in Blender's Text Editor and click Run Script.
 
-Builds, verifies, saves and opens Helios, Larnaca and a separate functional panel.
-No external Python installation, command-line arguments or preview renders needed.
+Builds, verifies, saves and opens Helios, Larnaca, panel, engine and ECS overview.
+Normal use needs no command-line arguments or separate Python installation.
+Background execution runs the identical stages for automated validation.
 """
 from pathlib import Path
 import datetime
@@ -32,6 +33,8 @@ STAGES = (
     ('Preverjanje kabine', 'verify_passenger_cabin.py', 'passenger_verification.log', []),
     ('Letalisce Larnaca', 'build_larnaca.py', 'larnaca.log', ['--skip-render']),
     ('Panel tlaka kabine', 'build_pressurization_panel.py', 'pressurization_panel.log', ['--skip-render']),
+    ('Motor CFM56-3', 'build_cfm56_engine.py', 'cfm56_engine.log', ['--skip-render']),
+    ('ECS pregled - faza 1', 'build_ecs_overview.py', 'ecs_overview.log', ['--skip-render']),
 )
 
 
@@ -48,9 +51,30 @@ def message(title, lines, icon='INFO'):
             bpy.context.window_manager.popup_menu(draw, title=title, icon=icon)
 
 
+def background_build():
+    """Run the same registered stages synchronously for automated validation."""
+    backup = ROOT / 'reports' / 'backups' / datetime.datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+    backup.mkdir(parents=True)
+    (ROOT / 'logs').mkdir(exist_ok=True)
+    for name in ('HEL-1_Boeing_737-300.blend', 'Boeing_737-300.blend', OUTPUT.name):
+        path = ROOT / 'models' / name
+        if path.exists():
+            shutil.copy2(path, backup / name)
+    for title, script, log_name, arguments in STAGES:
+        print('Helios: ' + title, flush=True)
+        cmd = [bpy.app.binary_path, '--background', '--factory-startup',
+               '--disable-autoexec', '--python-exit-code', '1', '--python', str(ROOT / 'scripts' / script)]
+        if arguments:
+            cmd += ['--', *arguments]
+        with (ROOT / 'logs' / log_name).open('w', encoding='utf-8') as log:
+            subprocess.run(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT, check=True,
+                           creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+
+
 def main():
     if bpy.app.background:
-        raise RuntimeError('Open run_all.py in Blender Text Editor and click Run Script.')
+        background_build()
+        return
     namespace = bpy.app.driver_namespace
     if STATE_KEY in namespace:
         message('Helios', ['Izdelava ze poteka. Napredek je v spodnji statusni vrstici.'])
@@ -122,10 +146,18 @@ def main():
         if panel_script:
             exec(compile(panel_script.as_string(), panel_script.name, 'exec'),
                  {'__name__': 'helios_pressurization_ui'})
+        engine_script = bpy.data.texts.get('CFM56_ENGINE_CONTROL.py')
+        if engine_script:
+            exec(compile(engine_script.as_string(), engine_script.name, 'exec'),
+                 {'__name__': 'helios_engine_ui'})
+        overview_script = bpy.data.texts.get('ECS_OVERVIEW_CONTROL.py')
+        if overview_script:
+            exec(compile(overview_script.as_string(), overview_script.name, 'exec'),
+                 {'__name__': 'helios_ecs_overview_ui'})
         # Save the visible airport scene and keep the script available for the next run.
         bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
-        message('Helios je pripravljen', ['Letalo, Larnaca in panel tlaka so izdelani, preverjeni in shranjeni.',
-                                        'Panel: scena 06 ali N > Pressurization > Inspect panel.', str(OUTPUT)])
+        message('Helios je pripravljen', ['Letalo, Larnaca, panel, motor in ECS pregled so shranjeni.',
+                                        'ECS: scena 08 ali N > ECS Overview > Inspect overview.', str(OUTPUT)])
 
     def finish():
         # Preserve even edits made while the build was running before opening its result.

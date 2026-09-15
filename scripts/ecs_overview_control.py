@@ -1,6 +1,6 @@
 """Optional ECS overview sidebar; native scene properties need no UI script.
 
-The two installed engines share an overview-owned presentation template.
+Installed engines share RPM controls and have independent presentation states.
 Controls here never target the independent standalone engine controller.
 """
 import bpy
@@ -8,9 +8,14 @@ import bpy
 SCENE = '08 | ECS_OVERVIEW'
 CONTROLLER = 'CTRL_ECS_OVERVIEW'
 ENGINE_CONTROLLER = 'ECS ENG | CTRL_ENGINE'
+ENGINE_PRESENTATION_CONTROLLER = 'CTRL_ECS_ENGINE_PRESENTATION'
 PHASE2_CONTROLLER = 'CTRL_ECS_PHASE2'
 CAMERAS = ('CAM_OVERVIEW_WIDE', 'CAM_OVERVIEW_3Q', 'CAM_OVERVIEW_SIDE')
 PHASE2_CAMERAS = ('CAM_ECS_PHASE2_LEFT', 'CAM_ECS_PHASE2_RIGHT', 'CAM_ECS_PHASE2_PACKS')
+ENGINE_MODES = ((0, 'Closed'), (1, 'Cutaway'), (2, 'Fully open'))
+SHELL_SECTIONS = (('INNER', 'Inner side'), ('OUTER', 'Outer side'),
+                  ('TOP', 'Top'), ('BOTTOM', 'Bottom'),
+                  ('FRONT', 'Intake / front'), ('AFT', 'Aft / core'))
 
 
 class ECS_OVERVIEW_OT_inspect(bpy.types.Operator):
@@ -56,6 +61,100 @@ class ECS_OVERVIEW_OT_inspect(bpy.types.Operator):
         return {'FINISHED'}
 
 
+class ECS_OVERVIEW_OT_engine_presentation(bpy.types.Operator):
+    bl_idname = 'ecs_overview.engine_presentation'
+    bl_label = 'Set installed engine presentation'
+    bl_description = ('Set the shell opening for the selected installed engine; '
+                      'keep its individual shell switches')
+    bl_options = {'REGISTER', 'UNDO'}
+
+    side: bpy.props.EnumProperty(
+        name='Engine',
+        items=(('LEFT', 'Left engine', 'Change the left installed engine'),
+               ('RIGHT', 'Right engine', 'Change the right installed engine'),
+               ('BOTH', 'Both engines', 'Change both installed engines')),
+        default='BOTH')
+    mode: bpy.props.IntProperty(name='Mode', default=0, min=0, max=2)
+
+    @classmethod
+    def poll(cls, context):
+        return (context.scene is not None and context.scene.name == SCENE
+                and bpy.data.objects.get(ENGINE_PRESENTATION_CONTROLLER) is not None)
+
+    def execute(self, context):
+        ctrl = bpy.data.objects.get(ENGINE_PRESENTATION_CONTROLLER)
+        sides = ('LEFT', 'RIGHT') if self.side == 'BOTH' else (self.side,)
+        if (ctrl is None or self.mode not in (0, 1, 2)
+                or any(side not in ('LEFT', 'RIGHT')
+                       for side in sides)
+                or any(side+'_ENGINE_MODE' not in ctrl for side in ('LEFT', 'RIGHT'))):
+            self.report({'WARNING'}, 'Build installed engine presentation first')
+            return {'CANCELLED'}
+        engine = bpy.data.objects.get(ENGINE_CONTROLLER)
+        if engine is not None and engine.get('CUTAWAY_MODE', False):
+            # Keep the other engine's effective appearance when leaving the
+            # legacy shared cutaway switch for independent mode controls.
+            for side in ('LEFT', 'RIGHT'):
+                ctrl[side+'_ENGINE_MODE'] = max(1, int(ctrl[side+'_ENGINE_MODE']))
+            engine['CUTAWAY_MODE'] = False
+            engine.update_tag()
+        for side in sides:
+            ctrl[side+'_ENGINE_MODE'] = self.mode
+        ctrl.update_tag()
+        context.view_layer.update()
+        return {'FINISHED'}
+
+
+def draw_engine_presentation(layout, ctrl, engine):
+    """Show native property state without requiring UI-side update handlers."""
+    layout.separator()
+    layout.label(text='Installed engine presentation')
+    both = layout.box()
+    both.label(text='Both engines')
+    row = both.row(align=True)
+    for mode, title in ENGINE_MODES:
+        active = all(ctrl.get(side+'_ENGINE_MODE') == mode
+                     for side in ('LEFT', 'RIGHT'))
+        operator = row.operator('ecs_overview.engine_presentation',
+                                text=title, depress=active)
+        operator.side, operator.mode = 'BOTH', mode
+    global_cutaway = bool(engine and engine.get('CUTAWAY_MODE', False))
+    if global_cutaway:
+        layout.label(text='Global cutaway is active.', icon='INFO')
+        layout.label(text='A mode button resumes independent control.')
+    layout.label(text='Shell switches hide additional sections.')
+    layout.label(text='Closed keeps your shell selections.')
+    for side, title in (('LEFT', 'Left engine'), ('RIGHT', 'Right engine')):
+        prop = side+'_ENGINE_MODE'
+        if prop not in ctrl:
+            continue
+        box = layout.box()
+        box.label(text=title)
+        row = box.row(align=True)
+        mode = int(ctrl[prop])
+        for value, label in ENGINE_MODES:
+            operator = row.operator('ecs_overview.engine_presentation',
+                                    text=label, depress=mode == value)
+            operator.side, operator.mode = side, value
+        box.label(text='Shell refinements')
+        fine = box.column(align=True)
+        show_nacelle = bool(engine is None or engine.get('SHOW_NACELLE', True))
+        show_internals = bool(engine is None or engine.get('SHOW_INTERNALS', True))
+        fine.enabled = mode != 2
+        effective_mode = 1 if global_cutaway and mode == 0 else mode
+        for index in range(0, len(SHELL_SECTIONS), 2):
+            row = fine.row(align=True)
+            for section, label in SHELL_SECTIONS[index:index+2]:
+                prop = side+'_SHOW_'+section
+                if prop in ctrl:
+                    cell = row.column(align=True)
+                    available = show_nacelle if section in ('FRONT', 'AFT') else show_nacelle or show_internals
+                    cell.enabled = available and not (effective_mode == 1 and section in ('OUTER', 'TOP'))
+                    cell.prop(ctrl, '["'+prop+'"]', text=label)
+        if mode == 2:
+            box.label(text='Every shell section is hidden.', icon='INFO')
+
+
 class ECS_OVERVIEW_PT_controls(bpy.types.Panel):
     bl_label = 'ECS overview'
     bl_idname = 'ECS_OVERVIEW_PT_controls'
@@ -92,15 +191,18 @@ class ECS_OVERVIEW_PT_controls(bpy.types.Panel):
         engine = bpy.data.objects.get(ENGINE_CONTROLLER)
         if engine:
             layout.separator()
-            layout.label(text='Both installed engines')
-            for prop, title in (('CUTAWAY_MODE', 'Engine cutaway'),
+            layout.label(text='Both engines | shared controls')
+            for prop, title in (('CUTAWAY_MODE', 'Global cutaway'),
                                 ('SHOW_NACELLE', 'Show nacelle'),
                                 ('SHOW_INTERNALS', 'Show internals'),
                                 ('N1_SPEED', 'N1 speed (RPM)'),
                                 ('N2_SPEED', 'N2 speed (RPM)')):
                 if prop in engine:
                     layout.prop(engine, '["'+prop+'"]', text=title)
-            layout.label(text='Shared state; constant RPM playback.', icon='INFO')
+            layout.label(text='Shared RPM; constant-speed playback.', icon='INFO')
+        presentation = bpy.data.objects.get(ENGINE_PRESENTATION_CONTROLLER)
+        if presentation:
+            draw_engine_presentation(layout, presentation, engine)
         phase2 = bpy.data.objects.get(PHASE2_CONTROLLER)
         if phase2:
             layout.separator()
@@ -125,7 +227,8 @@ class ECS_OVERVIEW_PT_controls(bpy.types.Panel):
                     row.operator('ecs_overview.inspect', text=title).camera = camera
 
 
-CLASSES = (ECS_OVERVIEW_OT_inspect, ECS_OVERVIEW_PT_controls)
+CLASSES = (ECS_OVERVIEW_OT_inspect, ECS_OVERVIEW_OT_engine_presentation,
+           ECS_OVERVIEW_PT_controls)
 
 
 def registered_class(cls):

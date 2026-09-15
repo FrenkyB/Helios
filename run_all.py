@@ -1,6 +1,7 @@
 """Open this file in Blender's Text Editor and click Run Script.
 
-Builds, verifies, saves and opens Helios, Larnaca, panel, engine and ECS Phases 1-2.
+Builds, verifies, saves and opens Helios, Larnaca, panel, engine and ECS Phases 1-2
+with independent installed-engine presentation controls.
 Normal use needs no command-line arguments or separate Python installation.
 Background execution runs the identical stages for automated validation.
 """
@@ -36,6 +37,7 @@ STAGES = (
     ('Motor CFM56-3', 'build_cfm56_engine.py', 'cfm56_engine.log', ['--skip-render']),
     ('ECS pregled - faza 1', 'build_ecs_overview.py', 'ecs_overview.log', ['--skip-render']),
     ('ECS pnevmatika - faza 2', 'build_ecs_phase2.py', 'ecs_phase2.log', ['--skip-render']),
+    ('ECS prikaz vgrajenih motorjev', 'build_ecs_engine_presentation.py', 'ecs_engine_presentation.log', ['--skip-render']),
 )
 
 

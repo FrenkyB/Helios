@@ -385,6 +385,9 @@ def verify_ui(scene, check):
         def column(self, **kwargs):
             return self
 
+        def box(self, **kwargs):
+            return self
+
         def separator(self, **kwargs):
             pass
 

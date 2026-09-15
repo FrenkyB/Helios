@@ -8,7 +8,9 @@ import bpy
 SCENE = '08 | ECS_OVERVIEW'
 CONTROLLER = 'CTRL_ECS_OVERVIEW'
 ENGINE_CONTROLLER = 'ECS ENG | CTRL_ENGINE'
+PHASE2_CONTROLLER = 'CTRL_ECS_PHASE2'
 CAMERAS = ('CAM_OVERVIEW_WIDE', 'CAM_OVERVIEW_3Q', 'CAM_OVERVIEW_SIDE')
+PHASE2_CAMERAS = ('CAM_ECS_PHASE2_LEFT', 'CAM_ECS_PHASE2_RIGHT', 'CAM_ECS_PHASE2_PACKS')
 
 
 class ECS_OVERVIEW_OT_inspect(bpy.types.Operator):
@@ -22,7 +24,7 @@ class ECS_OVERVIEW_OT_inspect(bpy.types.Operator):
         ctrl = bpy.data.objects.get(CONTROLLER)
         camera = bpy.data.objects.get(self.camera)
         if (scene is None or ctrl is None or context.window is None
-                or self.camera not in CAMERAS or camera is None
+                or self.camera not in CAMERAS+PHASE2_CAMERAS or camera is None
                 or camera.type != 'CAMERA' or camera.name not in scene.objects):
             self.report({'WARNING'}, 'Build the ECS overview before inspecting it')
             return {'CANCELLED'}
@@ -55,7 +57,7 @@ class ECS_OVERVIEW_OT_inspect(bpy.types.Operator):
 
 
 class ECS_OVERVIEW_PT_controls(bpy.types.Panel):
-    bl_label = 'ECS overview | Phase 1'
+    bl_label = 'ECS overview'
     bl_idname = 'ECS_OVERVIEW_PT_controls'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
@@ -99,6 +101,28 @@ class ECS_OVERVIEW_PT_controls(bpy.types.Panel):
                 if prop in engine:
                     layout.prop(engine, '["'+prop+'"]', text=title)
             layout.label(text='Shared state; constant RPM playback.', icon='INFO')
+        phase2 = bpy.data.objects.get(PHASE2_CONTROLLER)
+        if phase2:
+            layout.separator()
+            layout.label(text='Pneumatic system | Phase 2')
+            row = layout.row(align=True)
+            for side, title in (('LEFT', 'Left branch'), ('RIGHT', 'Right branch')):
+                if 'SHOW_'+side in phase2:
+                    row.prop(phase2, '["SHOW_'+side+'"]', text=title)
+            for prop, title in (('SHOW_DUCTS', 'Show ducts'),
+                                ('SHOW_PRECOOLERS', 'Show precoolers'),
+                                ('SHOW_PACKS', 'Show packs'),
+                                ('SHOW_AIRFLOW', 'Show airflow')):
+                if prop in phase2:
+                    layout.prop(phase2, '["'+prop+'"]', text=title)
+            if 'ECS_FLOW_SPEED' in phase2:
+                row = layout.row()
+                row.enabled = bool(phase2.get('SHOW_AIRFLOW', False))
+                row.prop(phase2, '["ECS_FLOW_SPEED"]', text='Flow speed (m/s)')
+            row = layout.row(align=True)
+            for title, camera in zip(('Left', 'Right', 'Packs'), PHASE2_CAMERAS):
+                if camera in context.scene.objects:
+                    row.operator('ecs_overview.inspect', text=title).camera = camera
 
 
 CLASSES = (ECS_OVERVIEW_OT_inspect, ECS_OVERVIEW_PT_controls)

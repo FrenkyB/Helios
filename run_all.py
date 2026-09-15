@@ -1,6 +1,6 @@
 """Open this file in Blender's Text Editor and click Run Script.
 
-Builds, verifies, saves and opens the complete Helios aircraft and Larnaca scene.
+Builds, verifies, saves and opens Helios, Larnaca and a separate functional panel.
 No external Python installation, command-line arguments or preview renders needed.
 """
 from pathlib import Path
@@ -31,6 +31,7 @@ STAGES = (
     ('Cockpit 737 Classic', 'update_classic_cockpit.py', 'classic_cockpit.log', ['--skip-render']),
     ('Preverjanje kabine', 'verify_passenger_cabin.py', 'passenger_verification.log', []),
     ('Letalisce Larnaca', 'build_larnaca.py', 'larnaca.log', ['--skip-render']),
+    ('Panel tlaka kabine', 'build_pressurization_panel.py', 'pressurization_panel.log', ['--skip-render']),
 )
 
 
@@ -116,9 +117,15 @@ def main():
                 elif area.type == 'TEXT_EDITOR':
                     text = bpy.data.texts.get('run_all.py') or bpy.data.texts.load(str(ROOT / 'run_all.py'))
                     area.spaces.active.text = text
+        # Initialize our embedded optional panel UI for this freshly built project.
+        panel_script = bpy.data.texts.get('PRESSURIZATION_PANEL_CONTROL.py')
+        if panel_script:
+            exec(compile(panel_script.as_string(), panel_script.name, 'exec'),
+                 {'__name__': 'helios_pressurization_ui'})
         # Save the visible airport scene and keep the script available for the next run.
         bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT))
-        message('Helios je pripravljen', ['Letalo in Larnaca sta izdelana, preverjena in shranjena.', str(OUTPUT)])
+        message('Helios je pripravljen', ['Letalo, Larnaca in panel tlaka so izdelani, preverjeni in shranjeni.',
+                                        'Panel: scena 06 ali N > Pressurization > Inspect panel.', str(OUTPUT)])
 
     def finish():
         # Preserve even edits made while the build was running before opening its result.
